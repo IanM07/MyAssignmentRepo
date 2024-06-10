@@ -1,79 +1,97 @@
-#Input parameters for the script
+﻿#Input parameters for the script
 param (
-    [string]$FileName,
-    [string]$DataType,
-    [string]$SortOrder
+    [string]$FileName,  #Path to the file containing the list of values
+    [string]$DataType,  #Type of sorted values requested: "alpha", "numeric", "both"
+    [string]$SortOrder  #Sort order: "ascending", "descending"
 )
 
-#Read the contents of the file
-$fileContent = Get-Content -Path $FileName
+#Validate DataType and SortOrder, returns an error if not a valid type
+if ($DataType -notin @("alpha", "numeric", "both")) {
+    Write-Error "Invalid DataType value. Valid values are: 'alpha', 'numeric', 'both'."
+    exit
+}
 
-#Split the file contents by commas and store them in an array
-$values = $fileContent -split ','
-
-#Split the values into a numeric list
-$numericValues = $values | Where-Object { 
-    #Trim any leading or trailing whitespace then ensure the value is numeric
-    $_ = $_.Trim()
-    ($_ -match "^[0-9eE.-]+$") -and (-not ($_ -match "^'.*'$"))
+if ($SortOrder -notin @("ascending", "descending")) {
+    Write-Error "Invalid SortOrder value. Valid values are: 'ascending', 'descending'."
+    exit
 }
 
 
-#Split the values into an alphanumeric list
-$alphaValues = $values | Where-Object { 
-    #Trim any leading or trailing whitespace then ensure the value is alphanumeric
-    $_ = $_.Trim()
-    ($_ -match "^'.*'$") -or ($_ -match "^[A-Za-z]+$")
-}
-
-
-#If the DataType is numeric then convert each value to a decimal
-if ($DataType -eq "numeric"){
-    $values = $numericValues | ForEach-Object {[decimal]$_}
-
-#If the DataType is alphanumeric then convert each value to a string
-}elseif ($DataType -eq "alpha"){
-    $values = $alphaValues | ForEach-Object {[string]$_}
-
-#If the DataType is both then convert both lists accordingly
-}elseif ($DataType -eq "both") {
-    $numericValues = $numericValues | ForEach-Object { [decimal]$_ }
-    $alphaValues = $alphaValues | ForEach-Object { [string]$_ }
-}
-
-
-
-#If the DataType is both, sort both lists
-if ($DataType -eq "both") {
-    $numericValues = $numericValues | ForEach-Object { [decimal]$_ }
-    $alphaValues = $alphaValues | ForEach-Object { [string]$_ }
-
-    # Sort both lists
-    if ($SortOrder -eq "ascending") {
-        $numericValues = $numericValues | Sort-Object
-        $alphaValues = $alphaValues | Sort-Object
-
-    } elseif ($SortOrder -eq "descending") {
-        $numericValues = $numericValues | Sort-Object -Descending
-        $alphaValues = $alphaValues | Sort-Object -Descending
+#Function to read and split file content, returns an error if the file is not able to be read
+function GetFileContent {
+    param ([string]$fileName)
+    try {
+        $fileContent = Get-Content -Path $fileName
+        #If the file is empty then exit the script and print an error
+        if ($fileContent -eq $null) {
+            Write-Error "The file is empty."
+            exit
+        }
+        return $fileContent -split ','
+    } catch {
+        Write-Error "Error reading file: $_"
+        exit
     }
 
-    #Concatenate the two lists
+}
+
+
+#Function to filter numeric values
+function GetNumericValues {
+    param ([array]$values)
+    return $values | Where-Object {
+        $_ = $_.Trim()
+        ($_ -match "^[0-9eE.-]+$") -and (-not ($_ -match "^'.*'$"))
+    }
+}
+
+
+#Function to filter alphanumeric values
+function GetAlphaValues {
+    param ([array]$values)
+    return $values | Where-Object {
+        $_ = $_.Trim()
+        ($_ -match "^'.*'$") -or ($_ -match "^[A-Za-z]+$")
+    }
+}
+
+
+#Function to sort values accoridng to the sortOrder
+function SortValues {
+    param ([array]$values, [string]$sortOrder)
+    if ($sortOrder -eq "ascending") {
+        return $values | Sort-Object
+
+    }elseif ($sortOrder -eq "descending") {
+        return $values | Sort-Object -Descending
+    }
+}
+
+
+#Read and split file content
+$values = GetFileContent -fileName $FileName
+
+#Split values into numeric and alphanumeric lists
+$numericValues = GetNumericValues -values $values
+$alphaValues = GetAlphaValues -values $values
+
+#Convert and sort values based on DataType
+if ($DataType -eq "numeric") {
+    $values = $numericValues | ForEach-Object { [decimal]$_ }
+    $values = SortValues -values $values -sortOrder $SortOrder
+
+} elseif ($DataType -eq "alpha") {
+    $values = $alphaValues | ForEach-Object { [string]$_ }
+    $values = SortValues -values $values -sortOrder $SortOrder
+
+} elseif ($DataType -eq "both") {
+    $numericValues = $numericValues | ForEach-Object { [decimal]$_ }
+    $alphaValues = $alphaValues | ForEach-Object { [string]$_ }
+    $numericValues = SortValues -values $numericValues -sortOrder $SortOrder
+    $alphaValues = SortValues -values $alphaValues -sortOrder $SortOrder
     $values = $numericValues + $alphaValues
-
-#If the DataType is not both then sort the list accordingly
-}else{
-    #Sort the values in ascending order
-    if ($SortOrder -eq "ascending") {
-        $values = $values | Sort-Object
-
-    #Sort the values in descending order
-    }elseif ($SortOrder -eq "descending") {
-        $values = $values | Sort-Object -Descending
-    }
 }
 
-
-#Rejoin the sorted values into a comma-separated list and output the final list
+#Rejoin and output the final list
 $output = $values -join ","
 Write-Output $output
