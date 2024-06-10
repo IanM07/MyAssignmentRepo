@@ -23,6 +23,7 @@ This PowerShell script reads the contents of a file with comma-separated values 
 ```
 ### Example
 **Numeric Values in Ascending Order**
+
 sample1.txt is a text file containing "1, 4, 6, 7, 3, 2, 1.5"
 ```powershell
 .\MyApp.ps1 "sample1.txt" "numeric" "ascending"
